@@ -26,8 +26,8 @@ class pingjunlayer(nn.Module):
         z_var = self.redistribute(z_var)#k给定
         #torch.zeros_like(input, dtype=None, layout=None, device=None, requires_grad=False)dtype=outputs.dtype, device=outputs.device,
         noise = torch.randn_like(outputs,  requires_grad=False)
-        z_var = z_var.cuda()
-        outputs = outputs + noise*torch.sqrt(z_var)  #????
+        #z_var = z_var.cuda()
+        outputs = outputs + noise * torch.sqrt(z_var)  #????
 
         return outputs
 
@@ -36,13 +36,15 @@ class pingjunlayer(nn.Module):
 
     def calculate(self,X):
         num = X.shape[self.dim]
-        var = torch.zeros(num, device= X.device, requires_grad=False)
-
-        for n in range(num):
-            if self.dim == 0:
-                var[n] = torch.std(X[n,:,:,:]).detach()
-            else:
-                var[n] = torch.std(X[:,n,:,:]).detach()
+        #var = torch.zeros(num, device= X.device, requires_grad=False)
+        var = X.clone().detach()
+        if self.dim == 0:
+            #var = torch.reshape(var,(num,-1))
+            var = torch.std(var,dim=(1,2,3))
+            
+        else:
+            var = torch.std(var,dim=(0,2,3))
+            
         var = torch.pow(var, 2)
         return var
  
@@ -50,7 +52,7 @@ class pingjunlayer(nn.Module):
     def redistribute(self, z_var):
         total_power = torch.sum(z_var * self.k)
         n = len(z_var)
-        power=torch.ones(1, requires_grad=False) * (total_power/n)
+        power = total_power/n
         return power
 
 class zhushuilayer(nn.Module):
@@ -69,16 +71,27 @@ class zhushuilayer(nn.Module):
         l,m,n,k = outputs.shape
         z_var = self.calculate(outputs)
         z_var = self.redistribute(z_var)#k给定
-        #torch.zeros_like(input, dtype=None, layout=None, device=None, requires_grad=False)dtype=outputs.dtype, device=outputs.device,
-        noise = torch.zeros_like(outputs,  requires_grad=False)
+        
+        noise = torch.randn_like(outputs,  requires_grad=False)
+        #noise = torch.zeros_like(outputs,  requires_grad=False)
         if self.dim == 0:
-            for idx in range(l):
-                sigma = torch.randn((m,n,k), device=noise.device)
-                noise[idx,:,:,:] = torch.sqrt(z_var[idx]) * sigma
+            z_var = torch.sqrt(z_var)
+            z_var = z_var.unsqueeze(1).unsqueeze(2).unsqueeze(3).to(device=noise.device)
+
+            noise = noise * z_var
+            
+            # for idx in range(l):
+            #     sigma = torch.randn((m,n,k), device=noise.device)
+            #     noise[idx,:,:,:] = torch.sqrt(z_var[idx]) * sigma
         else:
-            for idx in range(m):
-                sigma = torch.randn((l,n,k), device=noise.device)
-                noise[:,idx,:,:] = torch.sqrt(z_var[idx]) * sigma
+            z_var = torch.sqrt(z_var)
+            z_var = z_var.unsqueeze(0).unsqueeze(2).unsqueeze(3).to(device=noise.device)
+            
+            noise = noise * z_var
+
+            # for idx in range(m):
+            #     sigma = torch.randn((l,m,n,k), device=noise.device)
+            #     noise[:,idx,:,:] = torch.sqrt(z_var[idx]) * sigma
         
 
         outputs = outputs + noise  #????
@@ -90,12 +103,15 @@ class zhushuilayer(nn.Module):
 
     def calculate(self,X):
         num = X.shape[self.dim]
-        var = torch.zeros(num, device= X.device, requires_grad=False)
-        for n in range(num):
-            if self.dim == 0:
-                var[n] = torch.std(X[n,:,:,:]).detach()
-            else:
-                var[n] = torch.std(X[:,n,:,:]).detach()
+        #var = torch.zeros(num, device= X.device, requires_grad=False)
+        var = X.clone().detach()
+        if self.dim == 0:
+            #var = torch.reshape(var,(num,-1))
+            var = torch.std(var,dim=(1,2,3))
+            
+        else:
+            var = torch.std(var,dim=(0,2,3))
+            
         var = torch.pow(var, 2)
         return var
  
@@ -134,14 +150,14 @@ class zhushuilayer(nn.Module):
 
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # zhushui = zhushuilayer(0.05).to(device)
-    # input = torch.randn((5,3,20,20),requires_grad= True).to(device)
-    # output = zhushui(input)
-    # print(output.shape)
-
-
-    pingjun = pingjunlayer(0.05).to(device)
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    zhushui = zhushuilayer(0.1,1).to(device)
     input = torch.randn((5,3,20,20),requires_grad= True).to(device)
-    output = pingjun(input)
+    output = zhushui(input)
     print(output.shape)
+
+
+    # pingjun = pingjunlayer(0.1,1).to(device)
+    # input = torch.randn((5,3,20,20),requires_grad= True).to(device)
+    # output = pingjun(input)
+    # print(output.shape)
