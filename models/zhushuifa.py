@@ -121,30 +121,18 @@ class zhushuilayer(nn.Module):
         # print(total_power)
         sorted, indices = torch.sort(z_var)
         power=torch.zeros_like(z_var,requires_grad=False)
-        idx = 1
-
-        while total_power>0:
-            if sorted[idx]-sorted[idx-1]>0:
-                dp = sorted[idx] -sorted[idx-1]
-                if dp*idx < total_power:
-                    total_power -= dp*idx
-                else: 
-                    dp = total_power / idx
-                    total_power = 0
-                
-                for n in range(idx):
-                    power[indices[n]] += dp
-
-            idx += 1
-
-            if idx>= len(z_var):
-                dp = total_power / idx
-                for n in range(idx):
-                    power[indices[n]] += dp
-                # print(torch.sum(power))
-                # print(power)
-                # print(power+z_var)
-                break
+        idx = sorted.size(0)
+        
+        level = (total_power + torch.sum(sorted[:idx]))/idx
+        new_idx = torch.searchsorted(sorted[:idx],level)
+        
+        while new_idx < idx:
+            idx = new_idx
+            level = (total_power + torch.sum(sorted[:idx]))/idx
+            new_idx = torch.searchsorted(sorted[:idx],level)
+        
+        power[indices[:idx]] = level.expand(idx) - sorted[:idx]
+        
         return power
         
 
